@@ -5,7 +5,7 @@ use sea_orm::{
 
 use crate::{
     prepare_active_model, BuilderContext, EntityInputBuilder, EntityObjectBuilder,
-    EntityQueryFieldBuilder,
+    EntityQueryFieldBuilder, GuardAction,
 };
 
 /// The configuration structure of EntityCreateBatchMutationBuilder
@@ -64,11 +64,31 @@ impl EntityCreateBatchMutationBuilder {
 
         let context = self.context;
 
+        let object_name: String = entity_object_builder.type_name::<T>();
+        let guard = self.context.guards.entity_guards.get(&object_name);
+
         Field::new(
             self.type_name::<T>(),
             TypeRef::named_nn_list_nn(entity_object_builder.basic_type_name::<T>()),
             move |ctx| {
                 FieldFuture::new(async move {
+                    let guard_flag = if let Some(guard) = guard {
+                        (*guard)(&ctx)
+                    } else {
+                        GuardAction::Allow
+                    };
+
+                    if let GuardAction::Block(reason) = guard_flag {
+                        return match reason {
+                            Some(reason) => Err::<Option<_>, async_graphql::Error>(
+                                async_graphql::Error::new(reason),
+                            ),
+                            None => Err::<Option<_>, async_graphql::Error>(
+                                async_graphql::Error::new("Entity guard triggered."),
+                            ),
+                        };
+                    }
+
                     let db = ctx.data::<DatabaseConnection>()?;
                     let transaction = db.begin().await?;
 

@@ -6,7 +6,7 @@ use sea_orm::{
 
 use crate::{
     get_filter_conditions, prepare_active_model, BuilderContext, EntityInputBuilder,
-    EntityObjectBuilder, EntityQueryFieldBuilder, FilterInputBuilder,
+    EntityObjectBuilder, EntityQueryFieldBuilder, FilterInputBuilder, GuardAction,
 };
 
 /// The configuration structure of EntityUpdateMutationBuilder
@@ -75,11 +75,30 @@ impl EntityUpdateMutationBuilder {
 
         let context = self.context;
 
+        let guard = self.context.guards.entity_guards.get(&object_name);
+
         Field::new(
             self.type_name::<T>(),
             TypeRef::named_nn_list_nn(entity_object_builder.basic_type_name::<T>()),
             move |ctx| {
                 FieldFuture::new(async move {
+                    let guard_flag = if let Some(guard) = guard {
+                        (*guard)(&ctx)
+                    } else {
+                        GuardAction::Allow
+                    };
+
+                    if let GuardAction::Block(reason) = guard_flag {
+                        return match reason {
+                            Some(reason) => Err::<Option<_>, async_graphql::Error>(
+                                async_graphql::Error::new(reason),
+                            ),
+                            None => Err::<Option<_>, async_graphql::Error>(
+                                async_graphql::Error::new("Entity guard triggered."),
+                            ),
+                        };
+                    }
+
                     let db = ctx.data::<DatabaseConnection>()?;
                     let transaction = db.begin().await?;
 
