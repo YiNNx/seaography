@@ -5,6 +5,7 @@ use crate::{
     FilterInputConfig, OffsetInputConfig, OrderByEnumConfig, OrderInputConfig,
     PageInfoObjectConfig, PageInputConfig, PaginationInfoObjectConfig, PaginationInputConfig,
 };
+use async_graphql::dynamic::{FieldFuture, ResolverContext, TypeRef};
 
 pub mod guards;
 pub use guards::*;
@@ -52,4 +53,24 @@ pub struct BuilderContext {
     pub filter_types: FilterTypesMapConfig,
     // is_skipped function
     // naming function
+    pub custom_query_fields: Vec<CustomQuery>,
+    pub custom_mutation_fields: Vec<CustomMutation>,
+}
+
+pub struct CustomQuery {
+    pub name: String,
+    pub ty: TypeRef,
+    pub resolver_fn: Box<dyn Fn(ResolverContext<'_>) -> FieldFuture<'_> + Send + Sync + 'static>,
+}
+
+pub struct CustomMutation {
+    pub name: String,
+    pub ty: TypeRef,
+    pub resolver_fn: Box<dyn Fn(ResolverContext<'_>) -> FieldFuture<'_> + Send + Sync + 'static>,
+    pub arguments: Vec<CustomMutationArgument>,
+}
+
+pub struct CustomMutationArgument {
+    pub name: String,
+    pub ty: TypeRef,
 }

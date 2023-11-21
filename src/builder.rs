@@ -1,6 +1,8 @@
 use async_graphql::{
     dataloader::DataLoader,
-    dynamic::{Enum, Field, FieldFuture, InputObject, Object, Schema, SchemaBuilder, TypeRef},
+    dynamic::{
+        Enum, Field, FieldFuture, InputObject, InputValue, Object, Schema, SchemaBuilder, TypeRef,
+    },
 };
 use sea_orm::{ActiveEnum, ActiveModelTrait, EntityTrait, IntoActiveModel};
 
@@ -47,11 +49,28 @@ impl Builder {
     /// Used to create a new Builder from the given configuration context
     pub fn new(context: &'static BuilderContext, connection: sea_orm::DatabaseConnection) -> Self {
         let query: Object = Object::new("Query");
+        let query = context.custom_query_fields.iter().fold(query, |query, f| {
+            query.field(Field::new(
+                f.name.clone(),
+                f.ty.clone(),
+                f.resolver_fn.as_ref(),
+            ))
+        });
         let mutation = Object::new("Mutation").field(Field::new(
             "_ping",
             TypeRef::named(TypeRef::STRING),
             |_| FieldFuture::new(async move { Ok(Some(async_graphql::Value::from("pong"))) }),
         ));
+        let mutation = context
+            .custom_mutation_fields
+            .iter()
+            .fold(mutation, |mutation, f| {
+                let field = Field::new(f.name.clone(), f.ty.clone(), f.resolver_fn.as_ref());
+                let field = f.arguments.iter().fold(field, |field, arg| {
+                    field.argument(InputValue::new(arg.name.clone(), arg.ty.clone()))
+                });
+                mutation.field(field)
+            });
         let schema = Schema::build(query.type_name(), Some(mutation.type_name()), None);
 
         Self {
