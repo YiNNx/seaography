@@ -130,13 +130,11 @@ impl EntityObjectBuilder {
                 }
             );
 
-            let guard = self.context.guards.field_guards.get(&format!(
-                "{}.{}",
-                &object_name
-                    .strip_suffix(&self.context.entity_object.basic_type_suffix)
-                    .unwrap_or(object_name),
-                &column_name
-            ));
+            let guard = self
+                .context
+                .guards
+                .field_guards
+                .get(&format!("{}.{}", &object_name, &column_name));
 
             let conversion_fn = self
                 .context
